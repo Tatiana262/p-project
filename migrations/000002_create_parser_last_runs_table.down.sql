@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS parser_last_runs;
