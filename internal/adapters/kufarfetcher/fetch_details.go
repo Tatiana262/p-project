@@ -4,44 +4,38 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	// "log"
+	"log"
 	"regexp"
-
-	// "net/url"
 	"parser-project/internal/core/domain"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gocolly/colly/v2"
 )
 
-// --- kufar JSON parsing structures (as defined before) ---
-type kufarAdViewData struct {
-	AdID          string          `json:"adId"` // json.Number здесь хорошо, если ID может быть большим
-	Subject       string               `json:"subject"`
-	Body          string               `json:"body"`
-	
-	PriceBYN      string               `json:"price"`    // Если это всегда строка в JSON
-	PriceUSD      string               `json:"priceUsd"` // Если это всегда строка в JSON
-	PricePerSquareMeter string         `json:"pricePerSquareMeter"`
-	ListTime      string               `json:"date"`
-	Images        kufarImages          `json:"images"`
-
-	// AdParams      map[string]kufarAdParameterItem `json:"adParams"`
-	// AccountParams map[string]kufarAccountParameterItem `json:"accountParams"`
-
-	Initial Initial `json:"initial"`
-
-	IsCompanyAd   bool                 `json:"isCompanyAd"`
-	Address       string               `json:"address"`
+type kufarDetailRoot struct {
+	Result kufarAdResult `json:"result"`
 }
 
-type Initial struct {
+type kufarAdResult struct {
+	AdID          int          `json:"ad_id"` // json.Number здесь хорошо, если ID может быть большим
+	AdURL		  string		  `json:"ad_link"`
+	Subject       string               `json:"subject"`
+	Body          string               `json:"body"`
+
+	PriceBYN      string               `json:"price_byn"`    // Если это всегда строка в JSON
+	PriceUSD      string               `json:"price_usd"` // Если это всегда строка в JSON
+	Currency      string               `json:"currency"`
+
+	ListTime      string               `json:"list_time"`
+	Images        []kufarImage         `json:"images"`
+
+	IsCompanyAd   bool                 `json:"company_ad"`
+
+
 	AdParams []kufarAdParameterItem `json:"ad_parameters"`
 	AccountParams []kufarAccountParameterItem `json:"account_parameters"`
-	Currency      string               `json:"currency"`
 }
 
 type kufarAdParameterItem struct {
@@ -50,7 +44,6 @@ type kufarAdParameterItem struct {
 	P           string            `json:"p"`
 	V           interface{}       `json:"v"`  // Используем interface{}
 	Pu          string            `json:"pu"`
-	Order       int               `json:"order"`
 	G           []kufarParamGroup `json:"g,omitempty"` // Добавил omitempty, т.к. g не везде есть
 }
 
@@ -59,7 +52,6 @@ type kufarAccountParameterItem struct {
 	Value string            `json:"v"`
 	P     string            `json:"p"`
 	Pu    string            `json:"pu"`
-	Order int               `json:"order"`
 	G     []kufarParamGroup `json:"g,omitempty"`
 }
 
@@ -70,109 +62,100 @@ type kufarParamGroup struct {
 	ParamOrder int    `json:"po"`
 }
 
-type kufarImages struct {
-	Listings   []string `json:"listings"`
-	Gallery    []string `json:"gallery"`
-	Thumbnails []string `json:"thumbnails"`
-}
-
-type kufarDetailRoot struct {
-	Props kufarDetailProps `json:"props"`
-}
-
-type kufarDetailProps struct {
-	InitialState kufarDetailInitialState `json:"initialState"`
-}
-
-type kufarDetailInitialState struct {
-	AdView kufarAdViewContainer `json:"adView"`
-}
-
-type kufarAdViewContainer struct {
-	Data  kufarAdViewData `json:"data"`
-	Error string          `json:"error"`
+type kufarImage struct {
+	Path string `json:"path"`
 }
 
 
 // FetchAdDetails извлекает и преобразует детальную информацию об объявлении
-func (a *KufarFetcherAdapter) FetchAdDetails(ctx context.Context, adURL string) (*domain.PropertyRecord, error) {
+func (a *KufarFetcherAdapter) FetchAdDetails(ctx context.Context, adID int) (*domain.PropertyRecord, error) {
 	collector := a.collector.Clone()
 
-	var parsedData kufarAdViewData
-	var parseError error
-	var wg sync.WaitGroup
-	wg.Add(1) // Ожидаем один успешный вызов OnHTML
+	// var parsedData kufarAdViewData
+	var adDetails kufarDetailRoot
+	var fetchErr error // Для отслеживания ошибок внутри колбэка
 
-	collector.OnHTML("script#__NEXT_DATA__", func(e *colly.HTMLElement) {
-		defer wg.Done() // Сигнализируем о завершении OnHTML
-
-		jsonDataFromScript := e.Text
-		var data kufarDetailRoot
-		jsonErr := json.Unmarshal([]byte(jsonDataFromScript), &data)
-		if jsonErr != nil {
-			parseError = fmt.Errorf("kufar adapter (Detail): failed to unmarshal __NEXT_DATA__ JSON for URL %s: %w", adURL, jsonErr)
+	// OnResponse сработает, когда мы получим успешный ответ от API.
+	collector.OnResponse(func(r *colly.Response) {
+		// Десериализуем JSON из тела ответа
+		
+		if err := json.Unmarshal(r.Body, &adDetails); err != nil {
+			log.Printf("KufarAdapter: Ошибка при разборе JSON деталей для ad_id %d: %v\n", adID, err)
+			fetchErr = fmt.Errorf("failed to unmarshal ad details json: %w", err)
 			return
 		}
 
-		if data.Props.InitialState.AdView.Data.AdID == "" { // Проверка, что данные объявления есть
-			parseError = fmt.Errorf("kufar adapter (Detail): ad data not found in __NEXT_DATA__ for URL %s", adURL)
-			return
-		}
-		parsedData = data.Props.InitialState.AdView.Data
 	})
 
-	visitErr := collector.Visit(adURL)
+	// Формируем URL для API, используя adID
+	apiURL := fmt.Sprintf("https://api.kufar.by/search-api/v2/item/%d/rendered", adID)
+	visitErr := collector.Visit(apiURL)
 	if visitErr != nil {
-		return nil, fmt.Errorf("kufar adapter (Detail): failed to visit URL %s: %w", adURL, visitErr)
+		return nil, fmt.Errorf("kufar adapter (Detail): failed to visit URL %s: %w", apiURL, visitErr)
 	}
 	collector.Wait() // Ждем завершения HTTP запроса и выполнения OnHTML
-	wg.Wait() // Дополнительно ждем wg.Done() из OnHTML
 
-	if parseError != nil {
-		return nil, parseError
-	}
-	if parsedData.AdID == "" { // Если данные так и не были заполнены
-		return nil, fmt.Errorf("kufar adapter (Detail): no ad data was parsed from %s", adURL)
-	}
+	// Возвращаем ошибку, если она произошла внутри колбэка
+    if fetchErr != nil {
+        return nil, fetchErr
+    }
+
 	
 	// --- Преобразование kufarAdViewData в доменные структуры ---
 	record := &domain.PropertyRecord{}
 	record.Partner = "kufar"
-	record.Source = adURL
-	record.Slug = adURL
-	record.Title = parsedData.Subject
-	record.Address = parsedData.Address
-	// record.Slug = slug.Make(parsedData.Subject)
-	if parsedData.Body != "" { record.Description = &parsedData.Body }
-	
-	record.Currency = &parsedData.Initial.Currency
-	var totalPrice float64
-	if (*record.Currency == "USD") {
-		totalPrice = cleanPriceString(parsedData.PriceUSD)
+	record.Source = adDetails.Result.AdURL
+	record.Slug = adDetails.Result.AdURL
+	record.Title = adDetails.Result.Subject
+	record.Address = adDetails.Result.Subject
+
+	if adDetails.Result.Body != "" { record.Description = &adDetails.Result.Body }
+
+	var priceBYN float64
+	var priceUSD float64
+
+	// 1. Преобразуем цену в BYN
+	if priceBynInt, err := strconv.ParseInt(adDetails.Result.PriceBYN, 10, 64); err == nil {
+		// err == nil означает, что преобразование в число прошло успешно
+		priceBYN = float64(priceBynInt) / 100.0
 	} else {
-		totalPrice = cleanPriceString(parsedData.PriceBYN)
+		// Логируем ошибку, если в поле была не цифра, но не останавливаем парсинг
+		log.Printf("Could not parse PriceByn '%s' for ad_id %d", adDetails.Result.PriceBYN, adID)
 	}
 
-	if parsedData.PricePerSquareMeter != "" {
-		pricePerSqMeter := cleanPriceString(parsedData.PricePerSquareMeter)
-		record.PricePerSquareMeter = &pricePerSqMeter
+	// 2. Преобразуем цену в USD
+	if priceUsdInt, err := strconv.ParseInt(adDetails.Result.PriceUSD, 10, 64); err == nil {
+		priceUSD = float64(priceUsdInt) / 100.0
+	} else {
+		log.Printf("Could not parse PriceUsd '%s' for ad_id %d", adDetails.Result.PriceUSD, adID)
+	}
+	
+	record.Currency = &adDetails.Result.Currency
+	var totalPrice float64
+	if (*record.Currency == "USD") {
+		totalPrice = priceUSD
+	} else {
+		totalPrice = priceBYN
 	}
 
 	// Даты
-	if t, err := time.Parse(time.RFC3339, parsedData.ListTime); err == nil {
+	if t, err := time.Parse(time.RFC3339, adDetails.Result.ListTime); err == nil {
 		record.PublishedAt = &t
 		record.SiteCreatedAt = &t
 		record.SiteUpdatedAt = &t
 	}
+
 	// Изображения
-	if len(parsedData.Images.Gallery) > 0 {
-		record.Images = parsedData.Images.Gallery
-		record.PreviewImage = &parsedData.Images.Gallery[0]
+	for i, image := range adDetails.Result.Images {
+		if i == 0 {
+			record.PreviewImage = &image.Path
+		}
+		record.Images = append(record.Images, image.Path)
 	}
 
 	// Тип объявления от продавца
 	record.AdvertiserType = strPtr("private")
-	if parsedData.IsCompanyAd {
+	if adDetails.Result.IsCompanyAd {
 		record.AdvertiserType = strPtr("company")
 	}
 	// Статус по умолчанию
@@ -180,7 +163,7 @@ func (a *KufarFetcherAdapter) FetchAdDetails(ctx context.Context, adURL string) 
 
 	// Контакты
 	contactsMap := make(map[string]string)
-	for _, accParam := range parsedData.Initial.AccountParams {
+	for _, accParam := range adDetails.Result.AccountParams {
 		if accParam.P != "address" {
 			contactsMap[accParam.Label] = accParam.Value
 		}
@@ -196,12 +179,8 @@ func (a *KufarFetcherAdapter) FetchAdDetails(ctx context.Context, adURL string) 
 	var features, parsedFeatures, roomsNumList []string
 	// mappedParamCodes := make(map[string]bool)
 
-	
-
-	
-
 	// Основной цикл
-	for _, param := range parsedData.Initial.AdParams {
+	for _, param := range adDetails.Result.AdParams {
 		// if _, ok := mappedParamCodes[pCode]; ok { continue }
 
 		valStr := valueToString(param.ValueString); if valStr == "" { valStr = valueToString(param.V) }
@@ -209,7 +188,7 @@ func (a *KufarFetcherAdapter) FetchAdDetails(ctx context.Context, adURL string) 
 
 		isMapped := true
 		switch param.P {
-		case "safedeal_enabled", "delivery_enabled", "remuneration_type": // Пропускаем
+		case "remuneration_type": // Пропускаем
 		case "category": record.Estate = &valStr
 		case "region": record.Region = &valStr
 		case "area": record.District = &valStr

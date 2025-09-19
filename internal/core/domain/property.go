@@ -7,6 +7,7 @@ type PropertyLink struct {
 	URL      string    `json:"url"`
 	ListedAt time.Time `json:"listed_at"`
 	Source   string    `json:"source"` // Например, "kufar"
+	AdID int `json:"ad_id"`
 	// Можно добавить другие поля, если нужно передавать их в очередь,
 	// например, ID объявления, если он уже известен на этом этапе
 	// AdID string `json:"ad_id"`
