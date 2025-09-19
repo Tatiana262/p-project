@@ -84,6 +84,8 @@ func NewKufarFetcherAdapter(baseURL string, allowedDomain string, userAgent stri
 
 	return &KufarFetcherAdapter{
 		collector: c,
-		baseURL:   baseURL,
+		baseURL:   "https://api.kufar.by/search-api/v2/search/rendered-paginated?cat=1010&cur=BYR&gtsy=country-belarus~province-brestskaja_oblast~locality-brest&lang=ru&size=200&typ=sell&rms=v.or%3A3",
+	//return "https://api.kufar.by/search-api/v2/search/rendered-paginated?cat=1010&cur=BYR&gtsy=country-belarus~province-brestskaja_oblast~locality-brest&lang=ru&size=200&typ=sell", nil
+
 	}
 }

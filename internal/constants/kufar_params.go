@@ -57,7 +57,7 @@ func GetPredefinedSearches() []PredefinedSearch {
                 Region:           RegionBrestskayaOblast,
                 DealType:         DealTypeSell,
                 PropertyType:     PropertyTypeApartment,
-                KufarPathSegment: Rooms5,
+                // KufarPathSegment: Rooms5,
                 SortBy:           SortByDateDesc,
                 // Currency: CurrencyUSD, // Можно задавать здесь или глобально
             },
@@ -73,3 +73,6 @@ func GetPredefinedSearches() []PredefinedSearch {
         // },
     }
 }
+
+
+//return "https://api.kufar.by/search-api/v2/search/rendered-paginated?cat=1010&cur=BYR&gtsy=country-belarus~province-brestskaja_oblast~locality-brest&lang=ru&size=200&typ=sell", nil

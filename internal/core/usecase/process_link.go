@@ -40,12 +40,12 @@ func (uc *ProcessLinkUseCase) Execute(ctx context.Context, linkToParse domain.Pr
 	log.Printf("ProcessLinkUseCase: Successfully parsed details for AdID %d. Title: %s\n", linkToParse.AdID, propertyRecord.Title)
 
 	// 2. Используем порт для отправки результата в очередь
-	err := uc.resultQueue.Enqueue(ctx, *propertyRecord)
-	if err != nil {
-		// Если не удалось отправить, это критично. Возвращаем ошибку.
-		return fmt.Errorf("CRITICAL: failed to enqueue processed data for AdID %d: %w", linkToParse.AdID, err)
-	}
+	// err := uc.resultQueue.Enqueue(ctx, *propertyRecord)
+	// if err != nil {
+	// 	// Если не удалось отправить, это критично. Возвращаем ошибку.
+	// 	return fmt.Errorf("CRITICAL: failed to enqueue processed data for AdID %d: %w", linkToParse.AdID, err)
+	// }
 
-	log.Printf("ProcessLinkUseCase: Successfully enqueued processed data for '%d'.\n", linkToParse.AdID)
+	// log.Printf("ProcessLinkUseCase: Successfully enqueued processed data for '%d'.\n", linkToParse.AdID)
 	return nil
 }

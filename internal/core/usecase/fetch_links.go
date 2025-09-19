@@ -48,14 +48,17 @@ func (uc *FetchAndEnqueueLinksUseCase) Execute(ctx context.Context, initialCrite
 		initialCriteria.KufarPathSegment,
 	)
 
-	lastRunTime, err := uc.lastRunRepo.GetLastRunTimestamp(ctx, parserNameKey) // Делаем ключ уникальным для комбинации фильтров
-	if err != nil {
-		// Если ошибка (например, нет записи), можем начать с "начала времен" или за определенный период назад
-		log.Printf("Use Case: Could not get last run timestamp for '%s': %v. Fetching from a default point in time (or very old).\n", parserNameKey, err)
-		lastRunTime = time.Time{} // Или, например, time.Now().Add(-24 * time.Hour)
-	} else {
-		log.Printf("Use Case: Last run for '%s' was at %s. Fetching links since then.\n", parserNameKey, lastRunTime.Format(time.RFC3339))
-	}
+	// lastRunTime, err := uc.lastRunRepo.GetLastRunTimestamp(ctx, parserNameKey) // Делаем ключ уникальным для комбинации фильтров
+	// if err != nil {
+	// 	// Если ошибка (например, нет записи), можем начать с "начала времен" или за определенный период назад
+	// 	log.Printf("Use Case: Could not get last run timestamp for '%s': %v. Fetching from a default point in time (or very old).\n", parserNameKey, err)
+	// 	lastRunTime = time.Time{} // Или, например, time.Now().Add(-24 * time.Hour)
+	// } else {
+	// 	log.Printf("Use Case: Last run for '%s' was at %s. Fetching links since then.\n", parserNameKey, lastRunTime.Format(time.RFC3339))
+	// }
+
+	var err error
+	lastRunTime := time.Time{}
 
 	currentCriteria := initialCriteria
 	newLinksFoundOverall := 0

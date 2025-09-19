@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"regexp"
+	"os"
 	"parser-project/internal/core/domain"
+	"regexp"
 	"strconv"
 	"strings"
-	"time"
+	// "time"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -72,18 +73,34 @@ func (a *KufarFetcherAdapter) FetchAdDetails(ctx context.Context, adID int) (*do
 	collector := a.collector.Clone()
 
 	// var parsedData kufarAdViewData
-	var adDetails kufarDetailRoot
-	var fetchErr error // Для отслеживания ошибок внутри колбэка
+	// var adDetails kufarDetailRoot
+	// var fetchErr error // Для отслеживания ошибок внутри колбэка
 
 	// OnResponse сработает, когда мы получим успешный ответ от API.
 	collector.OnResponse(func(r *colly.Response) {
 		// Десериализуем JSON из тела ответа
+		// --- ВРЕМЕННЫЙ КОД ДЛЯ СОХРАНЕНИЯ JSON ---
+        
+        // Создаем папку, если ее нет
+        _ = os.MkdirAll("api_responses", 0755)
+        
+        // Формируем имя файла на основе ad_id, чтобы избежать дубликатов
+        filename := fmt.Sprintf("api_responses/ad_%d.json", adID)
+        
+        // Записываем "сырое" тело ответа в файл
+        err := os.WriteFile(filename, r.Body, 0644)
+        if err != nil {
+            log.Printf("Failed to save response for ad_id %d: %v", adID, err)
+        } else {
+            log.Printf("Successfully saved response for ad_id %d to %s", adID, filename)
+        }
 		
-		if err := json.Unmarshal(r.Body, &adDetails); err != nil {
-			log.Printf("KufarAdapter: Ошибка при разборе JSON деталей для ad_id %d: %v\n", adID, err)
-			fetchErr = fmt.Errorf("failed to unmarshal ad details json: %w", err)
-			return
-		}
+		
+		// if err := json.Unmarshal(r.Body, &adDetails); err != nil {
+		// 	log.Printf("KufarAdapter: Ошибка при разборе JSON деталей для ad_id %d: %v\n", adID, err)
+		// 	fetchErr = fmt.Errorf("failed to unmarshal ad details json: %w", err)
+		// 	return
+		// }
 
 	})
 
@@ -95,148 +112,148 @@ func (a *KufarFetcherAdapter) FetchAdDetails(ctx context.Context, adID int) (*do
 	}
 	collector.Wait() // Ждем завершения HTTP запроса и выполнения OnHTML
 
-	// Возвращаем ошибку, если она произошла внутри колбэка
-    if fetchErr != nil {
-        return nil, fetchErr
-    }
+	// // Возвращаем ошибку, если она произошла внутри колбэка
+    // if fetchErr != nil {
+    //     return nil, fetchErr
+    // }
 
 	
-	// --- Преобразование kufarAdViewData в доменные структуры ---
-	record := &domain.PropertyRecord{}
-	record.Partner = "kufar"
-	record.Source = adDetails.Result.AdURL
-	record.Slug = adDetails.Result.AdURL
-	record.Title = adDetails.Result.Subject
-	record.Address = adDetails.Result.Subject
+	// // --- Преобразование kufarAdViewData в доменные структуры ---
+	// record := &domain.PropertyRecord{}
+	// record.Partner = "kufar"
+	// record.Source = adDetails.Result.AdURL
+	// record.Slug = adDetails.Result.AdURL
+	// record.Title = adDetails.Result.Subject
+	// record.Address = adDetails.Result.Subject
 
-	if adDetails.Result.Body != "" { record.Description = &adDetails.Result.Body }
+	// if adDetails.Result.Body != "" { record.Description = &adDetails.Result.Body }
 
-	var priceBYN float64
-	var priceUSD float64
+	// var priceBYN float64
+	// var priceUSD float64
 
-	// 1. Преобразуем цену в BYN
-	if priceBynInt, err := strconv.ParseInt(adDetails.Result.PriceBYN, 10, 64); err == nil {
-		// err == nil означает, что преобразование в число прошло успешно
-		priceBYN = float64(priceBynInt) / 100.0
-	} else {
-		// Логируем ошибку, если в поле была не цифра, но не останавливаем парсинг
-		log.Printf("Could not parse PriceByn '%s' for ad_id %d", adDetails.Result.PriceBYN, adID)
-	}
+	// // 1. Преобразуем цену в BYN
+	// if priceBynInt, err := strconv.ParseInt(adDetails.Result.PriceBYN, 10, 64); err == nil {
+	// 	// err == nil означает, что преобразование в число прошло успешно
+	// 	priceBYN = float64(priceBynInt) / 100.0
+	// } else {
+	// 	// Логируем ошибку, если в поле была не цифра, но не останавливаем парсинг
+	// 	log.Printf("Could not parse PriceByn '%s' for ad_id %d", adDetails.Result.PriceBYN, adID)
+	// }
 
-	// 2. Преобразуем цену в USD
-	if priceUsdInt, err := strconv.ParseInt(adDetails.Result.PriceUSD, 10, 64); err == nil {
-		priceUSD = float64(priceUsdInt) / 100.0
-	} else {
-		log.Printf("Could not parse PriceUsd '%s' for ad_id %d", adDetails.Result.PriceUSD, adID)
-	}
+	// // 2. Преобразуем цену в USD
+	// if priceUsdInt, err := strconv.ParseInt(adDetails.Result.PriceUSD, 10, 64); err == nil {
+	// 	priceUSD = float64(priceUsdInt) / 100.0
+	// } else {
+	// 	log.Printf("Could not parse PriceUsd '%s' for ad_id %d", adDetails.Result.PriceUSD, adID)
+	// }
 	
-	record.Currency = &adDetails.Result.Currency
-	var totalPrice float64
-	if (*record.Currency == "USD") {
-		totalPrice = priceUSD
-	} else {
-		totalPrice = priceBYN
-	}
+	// record.Currency = &adDetails.Result.Currency
+	// var totalPrice float64
+	// if (*record.Currency == "USD") {
+	// 	totalPrice = priceUSD
+	// } else {
+	// 	totalPrice = priceBYN
+	// }
 
-	// Даты
-	if t, err := time.Parse(time.RFC3339, adDetails.Result.ListTime); err == nil {
-		record.PublishedAt = &t
-		record.SiteCreatedAt = &t
-		record.SiteUpdatedAt = &t
-	}
+	// // Даты
+	// if t, err := time.Parse(time.RFC3339, adDetails.Result.ListTime); err == nil {
+	// 	record.PublishedAt = &t
+	// 	record.SiteCreatedAt = &t
+	// 	record.SiteUpdatedAt = &t
+	// }
 
-	// Изображения
-	for i, image := range adDetails.Result.Images {
-		if i == 0 {
-			record.PreviewImage = &image.Path
-		}
-		record.Images = append(record.Images, image.Path)
-	}
+	// // Изображения
+	// for i, image := range adDetails.Result.Images {
+	// 	if i == 0 {
+	// 		record.PreviewImage = &image.Path
+	// 	}
+	// 	record.Images = append(record.Images, image.Path)
+	// }
 
-	// Тип объявления от продавца
-	record.AdvertiserType = strPtr("private")
-	if adDetails.Result.IsCompanyAd {
-		record.AdvertiserType = strPtr("company")
-	}
-	// Статус по умолчанию
-	record.Status = strPtr("active")
+	// // Тип объявления от продавца
+	// record.AdvertiserType = strPtr("private")
+	// if adDetails.Result.IsCompanyAd {
+	// 	record.AdvertiserType = strPtr("company")
+	// }
+	// // Статус по умолчанию
+	// record.Status = strPtr("active")
 
-	// Контакты
-	contactsMap := make(map[string]string)
-	for _, accParam := range adDetails.Result.AccountParams {
-		if accParam.P != "address" {
-			contactsMap[accParam.Label] = accParam.Value
-		}
-	}
-	if len(contactsMap) > 0 {
-		if jsonData, err := json.Marshal(contactsMap); err == nil {
-			rawJSON := json.RawMessage(jsonData)
-			record.Contacts = &rawJSON
-		}
-	}
+	// // Контакты
+	// contactsMap := make(map[string]string)
+	// for _, accParam := range adDetails.Result.AccountParams {
+	// 	if accParam.P != "address" {
+	// 		contactsMap[accParam.Label] = accParam.Value
+	// 	}
+	// }
+	// if len(contactsMap) > 0 {
+	// 	if jsonData, err := json.Marshal(contactsMap); err == nil {
+	// 		rawJSON := json.RawMessage(jsonData)
+	// 		record.Contacts = &rawJSON
+	// 	}
+	// }
 	
-	// --- Основной цикл по AdParams ---
-	var features, parsedFeatures, roomsNumList []string
-	// mappedParamCodes := make(map[string]bool)
+	// // --- Основной цикл по AdParams ---
+	// var features, parsedFeatures, roomsNumList []string
+	// // mappedParamCodes := make(map[string]bool)
 
-	// Основной цикл
-	for _, param := range adDetails.Result.AdParams {
-		// if _, ok := mappedParamCodes[pCode]; ok { continue }
+	// // Основной цикл
+	// for _, param := range adDetails.Result.AdParams {
+	// 	// if _, ok := mappedParamCodes[pCode]; ok { continue }
 
-		valStr := valueToString(param.ValueString); if valStr == "" { valStr = valueToString(param.V) }
-		if valStr == "" { continue }
+	// 	valStr := valueToString(param.ValueString); if valStr == "" { valStr = valueToString(param.V) }
+	// 	if valStr == "" { continue }
 
-		isMapped := true
-		switch param.P {
-		case "remuneration_type": // Пропускаем
-		case "category": record.Estate = &valStr
-		case "region": record.Region = &valStr
-		case "area": record.District = &valStr
-		case "square_meter": if v, err := strconv.ParseFloat(valStr, 64); err == nil { record.PricePerSquareMeter = &v } // Сохраняем как строку 
-		case "size": if v, err := strconv.ParseFloat(valStr, 64); err == nil { record.AreaInSquareMeters = &v }
-		case "rooms":
-			record.RoomsNumString = &valStr
-			// Для rooms_num берем значение из 'v', если оно есть
-			if vNumStr := valueToString(param.V); vNumStr != "" {
-				roomsNumList = append(roomsNumList, vNumStr)
-			}
-		case "floor": if v, err := strconv.Atoi(valStr); err == nil { record.FloorNumber = &v }
-		case "re_number_floors": if v, err := strconv.Atoi(valStr); err == nil { record.BuildingFloors = &v }
-		case "coordinates": 
-			if coords, ok := param.V.([]interface{}); ok && len(coords) == 2 {
-				// coordMap := map[string]interface{}{"type": "Point", "coordinates": []interface{}{coords[0], coords[1]}}
-				if jsonData, err := json.Marshal(coords); err == nil {
-					rawJSON := json.RawMessage(jsonData)
-					record.Coordinates = &rawJSON
-				}
-			}
+	// 	isMapped := true
+	// 	switch param.P {
+	// 	case "remuneration_type": // Пропускаем
+	// 	case "category": record.Estate = &valStr
+	// 	case "region": record.Region = &valStr
+	// 	case "area": record.District = &valStr
+	// 	case "square_meter": if v, err := strconv.ParseFloat(valStr, 64); err == nil { record.PricePerSquareMeter = &v } // Сохраняем как строку 
+	// 	case "size": if v, err := strconv.ParseFloat(valStr, 64); err == nil { record.AreaInSquareMeters = &v }
+	// 	case "rooms":
+	// 		record.RoomsNumString = &valStr
+	// 		// Для rooms_num берем значение из 'v', если оно есть
+	// 		if vNumStr := valueToString(param.V); vNumStr != "" {
+	// 			roomsNumList = append(roomsNumList, vNumStr)
+	// 		}
+	// 	case "floor": if v, err := strconv.Atoi(valStr); err == nil { record.FloorNumber = &v }
+	// 	case "re_number_floors": if v, err := strconv.Atoi(valStr); err == nil { record.BuildingFloors = &v }
+	// 	case "coordinates": 
+	// 		if coords, ok := param.V.([]interface{}); ok && len(coords) == 2 {
+	// 			// coordMap := map[string]interface{}{"type": "Point", "coordinates": []interface{}{coords[0], coords[1]}}
+	// 			if jsonData, err := json.Marshal(coords); err == nil {
+	// 				rawJSON := json.RawMessage(jsonData)
+	// 				record.Coordinates = &rawJSON
+	// 			}
+	// 		}
 
-		case "type":
-			if valStr == "Продажа" {
-				record.TransactionType = strPtr("sell")
-				record.TotalPrice = &totalPrice
-			} else if valStr == "Аренда" {
-				record.TransactionType = strPtr("rent")
-				record.RentPrice = &totalPrice
-			}
+	// 	case "type":
+	// 		if valStr == "Продажа" {
+	// 			record.TransactionType = strPtr("sell")
+	// 			record.TotalPrice = &totalPrice
+	// 		} else if valStr == "Аренда" {
+	// 			record.TransactionType = strPtr("rent")
+	// 			record.RentPrice = &totalPrice
+	// 		}
 
 
-		default:
-			isMapped = false
-		}
+	// 	default:
+	// 		isMapped = false
+	// 	}
 
-		if isMapped {
-			parsedFeatures = append(parsedFeatures, fmt.Sprintf("%s: %s", param.Label, valStr))
-		} else {
-			features = append(features, fmt.Sprintf("%s: %s", param.Label, valStr))
-		}
-	}
+	// 	if isMapped {
+	// 		parsedFeatures = append(parsedFeatures, fmt.Sprintf("%s: %s", param.Label, valStr))
+	// 	} else {
+	// 		features = append(features, fmt.Sprintf("%s: %s", param.Label, valStr))
+	// 	}
+	// }
 
-	if len(features) > 0 { record.Features = features }
-	if len(parsedFeatures) > 0 { record.ParsedFeatures = parsedFeatures }
-	if len(roomsNumList) > 0 { record.RoomsNum = roomsNumList }
+	// if len(features) > 0 { record.Features = features }
+	// if len(parsedFeatures) > 0 { record.ParsedFeatures = parsedFeatures }
+	// if len(roomsNumList) > 0 { record.RoomsNum = roomsNumList }
 
-	return record, nil
+	return &domain.PropertyRecord{}, nil
 }
 
 

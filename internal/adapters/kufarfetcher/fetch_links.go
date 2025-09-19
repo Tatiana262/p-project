@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"parser-project/internal/core/domain"
 	// "parser-project/internal/core/port" // Не нужен здесь, т.к. интерфейс в другом месте
-	"strings"
+	// "strings"
 	"time"
 
 	"github.com/gocolly/colly/v2"
@@ -51,27 +51,27 @@ type kufarPaginationItem struct {
 
 func (a *KufarFetcherAdapter) buildURLFromCriteria(criteria domain.Criteria) (string, error) {
     // ... (код без изменений)
-	if criteria.Region == "" || criteria.DealType == "" || criteria.PropertyType == "" {
-		return "", fmt.Errorf("kufar adapter: region, dealType, and propertyType are required in criteria")
-	}
-	pathSegments := []string{"l", criteria.Region, criteria.DealType, criteria.PropertyType}
-	if criteria.KufarPathSegment != "" {
-		pathSegments = append(pathSegments, criteria.KufarPathSegment)
-	}
-	basePath := "/" + strings.Join(pathSegments, "/")
+	// if criteria.Region == "" || criteria.DealType == "" || criteria.PropertyType == "" {
+	// 	return "", fmt.Errorf("kufar adapter: region, dealType, and propertyType are required in criteria")
+	// }
+	// pathSegments := []string{"l", criteria.Region, criteria.DealType, criteria.PropertyType}
+	// if criteria.KufarPathSegment != "" {
+	// 	pathSegments = append(pathSegments, criteria.KufarPathSegment)
+	// }
+	// basePath := "/" + strings.Join(pathSegments, "/")
 	queryParams := url.Values{}
-	if criteria.SortBy != "" { 
-		queryParams.Set("sort", criteria.SortBy)
-	}
+	// if criteria.SortBy != "" { 
+	// 	queryParams.Set("sort", criteria.SortBy)
+	// }
 	if criteria.Cursor != "" {
 		queryParams.Set("cursor", criteria.Cursor)
 	}
-	fullURL := a.baseURL + basePath
+	fullURL := a.baseURL
 	if len(queryParams) > 0 {
-		fullURL += "?" + queryParams.Encode()
+		fullURL += "&" + queryParams.Encode()
 	}
-	return "https://api.kufar.by/search-api/v2/search/rendered-paginated?cat=1010&cur=BYR&gtsy=country-belarus~province-brestskaja_oblast~locality-brest&lang=ru&size=30&rms=v.or%3A5&typ=sell", nil
-	// return fullURL, nil   // тут можно захардкодить url !!!!!!!!!!!!!1
+	//return "https://api.kufar.by/search-api/v2/search/rendered-paginated?cat=1010&cur=BYR&gtsy=country-belarus~province-brestskaja_oblast~locality-brest&lang=ru&size=200&typ=sell", nil
+	return fullURL, nil   // тут можно захардкодить url !!!!!!!!!!!!!1
 }
 
 func (a *KufarFetcherAdapter) FetchLinks(ctx context.Context, criteria domain.Criteria, since time.Time) ([]domain.PropertyLink, string, error) {

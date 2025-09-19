@@ -30,11 +30,11 @@ func NewProcessedPropertyConsumerAdapter(
 	}
 
 	// Создаем consumer, передавая ему метод этого адаптера как обработчик.
-	consumer, err := rabbitmq_consumer.NewConsumer(consumerCfg, adapter.messageHandler)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create RabbitMQ consumer for processed properties: %w", err)
-	}
-	adapter.consumer = consumer
+	// consumer, err := rabbitmq_consumer.NewConsumer(consumerCfg, adapter.messageHandler)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to create RabbitMQ consumer for processed properties: %w", err)
+	// }
+	// adapter.consumer = consumer
 
 	return adapter, nil
 }
@@ -64,10 +64,12 @@ func (a *ProcessedPropertyConsumerAdapter) messageHandler(d amqp.Delivery) (ack 
 
 // Start реализует EventListenerPort, запуская прослушивание очереди.
 func (a *ProcessedPropertyConsumerAdapter) Start(ctx context.Context) error {
-	return a.consumer.StartConsuming(ctx)
+	return nil
+	// return a.consumer.StartConsuming(ctx)
 }
 
 // Close реализует EventListenerPort, корректно останавливая консьюмера.
 func (a *ProcessedPropertyConsumerAdapter) Close() error {
-	return a.consumer.Close()
+	return nil
+	// return a.consumer.Close()
 }
