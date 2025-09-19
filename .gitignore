@@ -26,7 +26,7 @@ go.work.sum
 
 # env file
 .env
-api_responses
+api_responses/
 
 # Editor/IDE
 # .idea/
